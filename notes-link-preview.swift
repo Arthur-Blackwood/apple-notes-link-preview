@@ -143,6 +143,63 @@ func scan(_ editor: AXUIElement) -> [NoteLink]? {
         }
     }
 
+
+    // V4: detect links directly from AXLink ranges.
+    if let rich = rich {
+        let full = NSRange(location: 0, length: rich.length)
+
+        rich.enumerateAttribute(
+            NSAttributedString.Key("AXLink"),
+            in: full
+        ) { value, range, _ in
+            guard let value = value,
+                  !(value is NSNull),
+                  range.length > 0
+            else { return }
+
+            if let flag = value as? NSNumber,
+               !flag.boolValue {
+                return
+            }
+
+            var attachment = false
+
+            rich.enumerateAttribute(
+                NSAttributedString.Key("AXAttachment"),
+                in: range
+            ) { item, _, _ in
+                if let item = item, !(item is NSNull) {
+                    attachment = true
+                }
+            }
+
+            guard !attachment else { return }
+
+            guard !links.contains(where: {
+                NSIntersectionRange($0.range, range).length > 0
+            }) else { return }
+
+            let label = (rich.string as NSString)
+                .substring(with: range)
+
+            guard !label.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ).isEmpty,
+            !label.contains("\u{FFFC}")
+            else { return }
+
+            print("DEBUG: AXLink type:",
+                  String(describing: type(of: value)))
+            print("DEBUG: AXLink range:",
+                  range.location, range.length)
+
+            links.append(NoteLink(
+                range: range,
+                url: label
+            ))
+        }
+    }
+
     // Fallback: detect visible raw URLs.
     if let detector = try? NSDataDetector(
         types: NSTextCheckingResult.CheckingType.link.rawValue
@@ -242,8 +299,8 @@ guard AXIsProcessTrusted() else {
 }
 
 print(apply ? "APPLY MODE" : "DRY RUN — no note changes")
-print("You have 15 seconds to click inside your note.")
-pause(15)
+print("You have 5 seconds to click inside your note.")
+pause(5)
 
 guard notesActive() else {
     stop("Apple Notes is not active.")
