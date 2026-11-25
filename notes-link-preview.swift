@@ -193,9 +193,32 @@ func scan(_ editor: AXUIElement) -> [NoteLink]? {
             print("DEBUG: AXLink range:",
                   range.location, range.length)
 
+            // V8: stable URL identity
+            var identity = label
+
+            let raw = value as CFTypeRef
+
+            if CFGetTypeID(raw) == AXUIElementGetTypeID() {
+                let element = raw as! AXUIElement
+
+                if let target = attr(element, "AXURL") {
+                    if let url = target as? URL {
+                        identity = url.absoluteString
+                    } else if let url = target as? String,
+                              !url.isEmpty {
+                        identity = url
+                    }
+                }
+            } else if let url = value as? URL {
+                identity = url.absoluteString
+            } else if let url = value as? String,
+                      url.hasPrefix("http") {
+                identity = url
+            }
+
             links.append(NoteLink(
                 range: range,
-                url: label
+                url: identity
             ))
         }
     }
@@ -460,6 +483,14 @@ while true {
               visible.contains(point)
         else { continue }
 
+        CGEvent(
+            mouseEventSource: nil,
+            mouseType: .mouseMoved,
+            mouseCursorPosition: point,
+            mouseButton: .left
+        )?.post(tap: .cghidEventTap)
+
+        pause(0.2)
         rightClick(point)
 
         for _ in 0..<8 {
@@ -508,9 +539,32 @@ while true {
     var expectedAfter = expectedLabels
     expectedAfter.remove(at: skipped.count)
 
-    guard let after = scan(editor),
-          after.map(\.url) == expectedAfter
-    else {
+    var verified = false
+    var lastCount = links.count
+
+    // Wait for Notes to finish updating its document.
+    for _ in 0..<16 {
+        guard notesActive() else {
+            stop("Notes lost focus.")
+        }
+
+        if let after = scan(editor) {
+            lastCount = after.count
+
+            if after.map(\.url) == expectedAfter {
+                verified = true
+                break
+            }
+        }
+
+        pause(0.5)
+    }
+
+    guard verified else {
+        print("Verification failed: \(link.url)")
+        print("Links before: \(links.count)")
+        print("Links after: \(lastCount)")
+        print("Expected remaining: \(expectedAfter.count)")
         stop("Could not verify conversion. Check the note manually.")
     }
 
