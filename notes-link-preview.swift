@@ -199,26 +199,54 @@ guard AXIsProcessTrusted() else {
 }
 
 print(apply ? "APPLY MODE" : "DRY RUN — no note changes")
-print("You have 5 seconds to click inside your note.")
-pause(5)
+print("You have 15 seconds to click inside your note.")
+pause(15)
 
 guard notesActive() else {
     stop("Apple Notes is not active.")
 }
 
-guard let raw = attr(system, "AXFocusedUIElement"),
-      CFGetTypeID(raw) == AXUIElementGetTypeID()
-else { stop("Cannot find focused editor.") }
-
-let editor = raw as! AXUIElement
-
-guard attr(editor, "AXRole") as? String == "AXTextArea"
-else { stop("Click inside the note body and try again.") }
 
 guard let app = NSWorkspace.shared.frontmostApplication
 else { stop("Cannot find Notes.") }
 
 let notes = AXUIElementCreateApplication(app.processIdentifier)
+
+func findEditor(_ raw: CFTypeRef?) -> AXUIElement? {
+    guard let raw = raw,
+          CFGetTypeID(raw) == AXUIElementGetTypeID()
+    else { return nil }
+
+    var element = raw as! AXUIElement
+
+    for _ in 0..<15 {
+        if attr(element, "AXRole") as? String == "AXTextArea" {
+            return element
+        }
+        guard let parent = attr(element, "AXParent"),
+              CFGetTypeID(parent) == AXUIElementGetTypeID()
+        else { break }
+        element = parent as! AXUIElement
+    }
+    return nil
+}
+
+var found = findEditor(attr(notes, "AXFocusedUIElement"))
+    ?? findEditor(attr(system, "AXFocusedUIElement"))
+
+if found == nil, let point = CGEvent(source: nil)?.location {
+    var hit: AXUIElement?
+    let result = AXUIElementCopyElementAtPosition(
+        notes, Float(point.x), Float(point.y), &hit
+    )
+    print("Accessibility hit test: ", result.rawValue)
+    if let hit = hit {
+        found = findEditor(hit)
+    }
+}
+
+guard let editor = found
+else { stop("Cannot locate editor. Keep mouse over note text.") }
 
 guard let original = scan(editor)
 else { stop("Cannot read note contents through Accessibility.") }
