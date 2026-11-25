@@ -357,13 +357,15 @@ for link in original.reversed() {
 }
 
 if !apply {
-    print("Dry run complete. Use --apply to convert.")
+    print("Dry run complete. Run nlp to convert.")
     exit(0)
 }
 
+// V5: retry and skip
 var converted = 0
+var skipped: [String] = []
 
-while true {
+for candidate in original {
     guard notesActive() else {
         stop("Notes lost focus. Converted: \(converted)")
     }
@@ -372,52 +374,117 @@ while true {
         stop("Cannot rescan note. Converted: \(converted)")
     }
 
-    guard let link = links.first else { break }
+    guard let link = links.first(where: {
+        $0.range == candidate.range &&
+        $0.url == candidate.url
+    }) else {
+        skipped.append(candidate.url)
+        print("Skipped: link position changed")
+        continue
+    }
 
-    // Move the caret to the last remaining link.
-    var selection = CFRange(
-        location: link.range.location,
-        length: 0
-    )
 
-    guard let value = AXValueCreate(.cfRange, &selection),
-          AXUIElementSetAttributeValue(
-            editor, "AXSelectedTextRange" as CFString, value
-          ) == .success
-    else { stop("Cannot position caret. Converted: \(converted)") }
+    print("Processing: \(link.url)")
 
-    key(124) // Right arrow: move caret into view.
-    pause(0.6)
+    let offsets = [
+        link.range.length / 2,
+        min(2, link.range.length - 1),
+        link.range.length * 3 / 4,
+        0
+    ]
 
-    guard let rawBounds = param(
-        editor, "AXBoundsForRange",
-        NSRange(location: link.range.location, length: 1)
-    ), CFGetTypeID(rawBounds) == AXValueGetTypeID()
-    else { stop("Cannot locate link on screen.") }
+    var foundItem: AXUIElement?
+    var attempted = Set<Int>()
 
-    var bounds = CGRect.zero
-    guard AXValueGetValue(
-        rawBounds as! AXValue, .cgRect, &bounds
-    ), !bounds.isEmpty
-    else { stop("Invalid link bounds.") }
+    for offset in offsets {
+        guard notesActive() else {
+            stop("Notes lost focus.")
+        }
 
-    let point = CGPoint(x: bounds.midX, y: bounds.midY)
+        guard attempted.insert(offset).inserted
+        else { continue }
 
-    guard notesActive(),
-          let visible = visibleFrame(editor),
-          visible.contains(point)
-    else { stop("Link is outside the visible editor.") }
+        let location = link.range.location + offset
 
-    rightClick(point)
-    pause(0.5)
+        var selection = CFRange(
+            location: location,
+            length: 0
+        )
+
+        guard let value = AXValueCreate(
+            .cfRange, &selection
+        ),
+        AXUIElementSetAttributeValue(
+            editor,
+            "AXSelectedTextRange" as CFString,
+            value
+        ) == .success
+        else { continue }
+
+        key(124)
+        pause(0.6)
+
+        guard let rawBounds = param(
+            editor,
+            "AXBoundsForRange",
+            NSRange(location: location, length: 1)
+        ),
+        CFGetTypeID(rawBounds) == AXValueGetTypeID()
+        else { continue }
+
+        var bounds = CGRect.zero
+
+        guard AXValueGetValue(
+            rawBounds as! AXValue,
+            .cgRect,
+            &bounds
+        ), !bounds.isEmpty
+        else { continue }
+
+        let point = CGPoint(
+            x: bounds.midX,
+            y: bounds.midY
+        )
+
+        guard notesActive() else {
+            stop("Notes lost focus.")
+        }
+
+        guard let visible = visibleFrame(editor),
+              visible.contains(point)
+        else { continue }
+
+        rightClick(point)
+
+        for _ in 0..<4 {
+            pause(0.3)
+
+            guard notesActive() else {
+                stop("Notes lost focus.")
+            }
+
+            if let item = menuItem(notes) {
+                foundItem = item
+                break
+            }
+        }
+
+        if foundItem != nil { break }
+
+        key(53)
+        pause(0.3)
+
+        print("Retrying another link position...")
+    }
+
+    guard let item = foundItem else {
+        print("Skipped: \(link.url)")
+        skipped.append(link.url)
+        continue
+    }
 
     guard notesActive() else {
         stop("Notes lost focus.")
-    }
-
-    guard let item = menuItem(notes) else {
-        key(53) // Escape
-        stop("Show Link Preview not found. Converted: \(converted)")
     }
 
     guard AXUIElementPerformAction(
@@ -439,4 +506,16 @@ while true {
     print("Converted \(converted): \(link.url)")
 }
 
-print("Finished. Converted \(converted) link(s).")
+
+print("")
+print("========== SUMMARY ==========")
+print("Detected: \(original.count)")
+print("Converted: \(converted)")
+print("Skipped: \(skipped.count)")
+
+for name in skipped {
+    print("  - \(name)")
+}
+
+print("=============================")
+
