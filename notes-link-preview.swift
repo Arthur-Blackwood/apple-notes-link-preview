@@ -83,6 +83,49 @@ func scan(_ editor: AXUIElement) -> [NoteLink]? {
         links.append(NoteLink(range: range, url: url))
     }
 
+    print("DEBUG: Plain text length:", plain?.utf16.count ?? -1)
+    print("DEBUG: Character count:", count)
+    print("DEBUG: Attributed text length:", rich?.length ?? -1)
+
+    var keys = Set<String>()
+    rich?.enumerateAttributes(
+        in: NSRange(location: 0, length: rich?.length ?? 0)
+    ) { attributes, _, _ in
+        for k in attributes.keys {
+            keys.insert(k.rawValue)
+        }
+    }
+
+    print("DEBUG: Attribute keys:", keys.sorted())
+
+    if let data = param(
+        editor, "AXRTFForRange",
+        NSRange(location: 0, length: count)
+    ) as? Data,
+       let rtf = try? NSAttributedString(
+           data: data,
+           options: [.documentType:
+                       NSAttributedString.DocumentType.rtf],
+           documentAttributes: nil
+       ) {
+        print("DEBUG: RTF length:", rtf.length)
+
+        if rtf.string == text {
+            rtf.enumerateAttribute(
+                .link,
+                in: NSRange(location: 0, length: rtf.length)
+            ) { value, range, _ in
+                if let url = value as? URL {
+                    add(range, url.absoluteString)
+                } else if let url = value as? String {
+                    add(range, url)
+                }
+            }
+        }
+    } else {
+        print("DEBUG: RTF unavailable")
+    }
+
     if let rich = rich {
         rich.enumerateAttributes(
             in: NSRange(location: 0, length: rich.length)
