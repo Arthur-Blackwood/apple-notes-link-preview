@@ -311,14 +311,45 @@ func visibleFrame(_ editor: AXUIElement) -> CGRect? {
     return result
 }
 
-func rightClick(_ point: CGPoint) {
-    for type in [CGEventType.rightMouseDown,
-                 CGEventType.rightMouseUp] {
-        CGEvent(mouseEventSource: nil,
-                mouseType: type,
-                mouseCursorPosition: point,
-                mouseButton: .right)?
-            .post(tap: .cghidEventTap)
+
+// V9: native mouse events
+func rightClick(_ point: CGPoint, control: Bool = false) {
+    let source = CGEventSource(stateID: .hidSystemState)
+
+    let button: CGMouseButton = control ? .left : .right
+
+    let downType: CGEventType =
+        control ? .leftMouseDown : .rightMouseDown
+
+    let upType: CGEventType =
+        control ? .leftMouseUp : .rightMouseUp
+
+    CGEvent(
+        mouseEventSource: source,
+        mouseType: .mouseMoved,
+        mouseCursorPosition: point,
+        mouseButton: .left
+    )?.post(tap: .cghidEventTap)
+
+    pause(0.15)
+
+    guard notesActive() else { return }
+
+    for type in [downType, upType] {
+        guard let event = CGEvent(
+            mouseEventSource: source,
+            mouseType: type,
+            mouseCursorPosition: point,
+            mouseButton: button
+        ) else { return }
+
+        event.setIntegerValueField(
+            .mouseEventClickState, value: 1
+        )
+
+        event.flags = control ? .maskControl : []
+
+        event.post(tap: .cghidEventTap)
         pause(0.08)
     }
 }
@@ -435,63 +466,77 @@ while true {
 
         let location = link.range.location + offset
 
-        var selection = CFRange(
-            location: location,
-            length: 0
-        )
 
-        guard let value = AXValueCreate(
-            .cfRange, &selection
-        ),
-        AXUIElementSetAttributeValue(
-            editor,
-            "AXSelectedTextRange" as CFString,
-            value
-        ) == .success
-        else { continue }
+        func visiblePoint() -> CGPoint? {
+            guard let rawBounds = param(
+                editor,
+                "AXBoundsForRange",
+                NSRange(location: location, length: 1)
+            ),
+            CFGetTypeID(rawBounds) == AXValueGetTypeID()
+            else { return nil }
 
-        key(124)
-        pause(0.9)
+            var bounds = CGRect.zero
 
-        guard let rawBounds = param(
-            editor,
-            "AXBoundsForRange",
-            NSRange(location: location, length: 1)
-        ),
-        CFGetTypeID(rawBounds) == AXValueGetTypeID()
-        else { continue }
+            guard AXValueGetValue(
+                rawBounds as! AXValue,
+                .cgRect,
+                &bounds
+            ), !bounds.isEmpty
+            else { return nil }
 
-        var bounds = CGRect.zero
+            let point = CGPoint(
+                x: bounds.midX,
+                y: bounds.midY
+            )
 
-        guard AXValueGetValue(
-            rawBounds as! AXValue,
-            .cgRect,
-            &bounds
-        ), !bounds.isEmpty
-        else { continue }
+            guard let visible = visibleFrame(editor),
+                  visible.contains(point)
+            else { return nil }
 
-        let point = CGPoint(
-            x: bounds.midX,
-            y: bounds.midY
-        )
+            return point
+        }
+
+        // Do not change the caret if the link is visible.
+        if visiblePoint() == nil {
+            var selection = CFRange(
+                location: location,
+                length: 0
+            )
+
+            guard let value = AXValueCreate(
+                .cfRange, &selection
+            ),
+            AXUIElementSetAttributeValue(
+                editor,
+                "AXSelectedTextRange" as CFString,
+                value
+            ) == .success
+            else { continue }
+
+            pause(0.6)
+
+            // Keyboard scrolling only as a fallback.
+            if visiblePoint() == nil {
+                key(124)
+                pause(0.9)
+            }
+        }
 
         guard notesActive() else {
             stop("Notes lost focus.")
         }
 
-        guard let visible = visibleFrame(editor),
-              visible.contains(point)
+        guard let point = visiblePoint()
         else { continue }
 
-        CGEvent(
-            mouseEventSource: nil,
-            mouseType: .mouseMoved,
-            mouseCursorPosition: point,
-            mouseButton: .left
-        )?.post(tap: .cghidEventTap)
+        let control = attempted.count % 2 == 0
 
-        pause(0.2)
-        rightClick(point)
+        print(control
+            ? "Click method: Control-click"
+            : "Click method: Right-click")
+
+        rightClick(point, control: control)
 
         for _ in 0..<8 {
             pause(0.3)
