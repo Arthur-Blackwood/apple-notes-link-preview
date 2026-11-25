@@ -361,11 +361,12 @@ if !apply {
     exit(0)
 }
 
-// V5: retry and skip
+// V6: dynamic link positions
 var converted = 0
 var skipped: [String] = []
+var expectedLabels = original.map(\.url)
 
-for candidate in original {
+while true {
     guard notesActive() else {
         stop("Notes lost focus. Converted: \(converted)")
     }
@@ -374,14 +375,13 @@ for candidate in original {
         stop("Cannot rescan note. Converted: \(converted)")
     }
 
-    guard let link = links.first(where: {
-        $0.range == candidate.range &&
-        $0.url == candidate.url
-    }) else {
-        skipped.append(candidate.url)
-        print("Skipped: link position changed")
-        continue
+    guard links.map(\.url) == expectedLabels else {
+        stop("Unexpected link changes. Converted: \(converted)")
     }
+
+    guard links.count > skipped.count else { break }
+
+    let link = links[skipped.count]
 
 
     print("Processing: \(link.url)")
@@ -496,12 +496,16 @@ for candidate in original {
 
     pause(1.2)
 
+    var expectedAfter = expectedLabels
+    expectedAfter.remove(at: skipped.count)
+
     guard let after = scan(editor),
-          after.count < links.count
+          after.map(\.url) == expectedAfter
     else {
         stop("Could not verify conversion. Check the note manually.")
     }
 
+    expectedLabels = expectedAfter
     converted += 1
     print("Converted \(converted): \(link.url)")
 }
