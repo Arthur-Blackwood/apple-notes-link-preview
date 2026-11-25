@@ -243,6 +243,73 @@ func scan(_ editor: AXUIElement) -> [NoteLink]? {
     }
 }
 
+// V10: inline link protection
+func noteText(_ editor: AXUIElement) -> NSString? {
+    guard let count = (attr(editor, "AXNumberOfCharacters")
+        as? NSNumber)?.intValue, count > 0
+    else { return nil }
+
+    guard let rich = param(
+        editor, "AXAttributedStringForRange",
+        NSRange(location: 0, length: count)
+    ) as? NSAttributedString
+    else { return nil }
+
+    return rich.string as NSString
+}
+
+func selectedRange(_ editor: AXUIElement) -> NSRange? {
+    guard let raw = attr(editor, "AXSelectedTextRange"),
+          CFGetTypeID(raw) == AXValueGetTypeID()
+    else { return nil }
+
+    var range = CFRange(location: 0, length: 0)
+
+    guard AXValueGetValue(raw as! AXValue, .cfRange, &range)
+    else { return nil }
+
+    return NSRange(location: range.location, length: range.length)
+}
+
+func selectLink(_ editor: AXUIElement, _ range: NSRange) -> Bool {
+    var selection = CFRange(
+        location: range.location,
+        length: range.length
+    )
+
+    guard let value = AXValueCreate(.cfRange, &selection),
+          AXUIElementSetAttributeValue(
+              editor, "AXSelectedTextRange" as CFString, value
+          ) == .success
+    else { return false }
+
+    pause(0.25)
+    return selectedRange(editor) == range
+}
+
+func isInlineLink(_ text: NSString, _ range: NSRange) -> Bool {
+    let line = text.lineRange(for: range)
+
+    let before = text.substring(with: NSRange(
+        location: line.location,
+        length: range.location - line.location
+    ))
+
+    let after = text.substring(with: NSRange(
+        location: NSMaxRange(range),
+        length: NSMaxRange(line) - NSMaxRange(range)
+    ))
+
+    let prefix = before.trimmingCharacters(
+        in: CharacterSet.whitespacesAndNewlines.union(
+            CharacterSet(charactersIn: "•◦▪-")
+        )
+    )
+
+    return !prefix.isEmpty ||
+        !after.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+}
+
 func menuItem(_ e: AXUIElement,
               depth: Int = 0, trace: Bool = false) -> AXUIElement? {
     guard depth < 10 else { return nil }
@@ -446,6 +513,16 @@ while true {
 
     print("Processing: \(link.url)")
 
+    guard let beforeText = noteText(editor),
+          NSMaxRange(link.range) <= beforeText.length
+    else { stop("Cannot verify target text range.") }
+
+    let targetText = beforeText.substring(with: link.range)
+    let inline = isInlineLink(beforeText, link.range)
+
+    print("Target text: \(targetText)")
+    print("Link type: \(inline ? "Inline" : "Standalone")")
+
     let offsets = [
         link.range.length / 2,
         min(2, link.range.length - 1),
@@ -527,6 +604,14 @@ while true {
             stop("Notes lost focus.")
         }
 
+        if inline {
+            guard selectLink(editor, link.range)
+            else {
+                print("Could not select complete link.")
+                continue
+            }
+        }
+
         guard let point = visiblePoint()
         else { continue }
 
@@ -551,7 +636,17 @@ while true {
             }
         }
 
-        if foundItem != nil { break }
+        if foundItem != nil {
+            if inline && selectedRange(editor) != link.range {
+                print("Selection changed — retrying safely.")
+                foundItem = nil
+                key(53)
+                pause(0.3)
+                continue
+            }
+
+            break
+        }
 
         print("Inspecting context menu...")
         _ = menuItem(notes, trace: true)
@@ -607,6 +702,21 @@ while true {
 
     guard verified else {
         print("Verification failed: \(link.url)")
+        print("Original target: \(targetText)")
+
+        if let currentText = noteText(editor),
+           let remaining = scan(editor) {
+
+            print("Document text changed:",
+                  !currentText.isEqual(beforeText))
+
+            for candidate in remaining where candidate.url == link.url {
+                if NSMaxRange(candidate.range) <= currentText.length {
+                    print("Remaining matching link:",
+                          currentText.substring(with: candidate.range))
+                }
+            }
+        }
         print("Links before: \(links.count)")
         print("Links after: \(lastCount)")
         print("Expected remaining: \(expectedAfter.count)")
