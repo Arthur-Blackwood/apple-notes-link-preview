@@ -221,13 +221,19 @@ func scan(_ editor: AXUIElement) -> [NoteLink]? {
 }
 
 func menuItem(_ e: AXUIElement,
-              depth: Int = 0) -> AXUIElement? {
+              depth: Int = 0, trace: Bool = false) -> AXUIElement? {
     guard depth < 10 else { return nil }
 
     let role = attr(e, "AXRole") as? String ?? ""
     let title = attr(e, "AXTitle") as? String ?? ""
 
     if role == "AXMenuBar" { return nil }
+
+    // V7: menu diagnostics
+    if trace && role == "AXMenuItem" {
+        print("MENU: " + title)
+    }
+
 
     if role == "AXMenuItem",
        ["Show Link Preview", "显示链接预览", "顯示連結預覽"]
@@ -237,7 +243,7 @@ func menuItem(_ e: AXUIElement,
 
     for child in attr(e, "AXChildren")
         as? [AXUIElement] ?? [] {
-        if let match = menuItem(child, depth: depth + 1) {
+        if let match = menuItem(child, depth: depth + 1, trace: trace) {
             return match
         }
     }
@@ -422,7 +428,7 @@ while true {
         else { continue }
 
         key(124)
-        pause(0.6)
+        pause(0.9)
 
         guard let rawBounds = param(
             editor,
@@ -456,7 +462,7 @@ while true {
 
         rightClick(point)
 
-        for _ in 0..<4 {
+        for _ in 0..<8 {
             pause(0.3)
 
             guard notesActive() else {
@@ -470,6 +476,9 @@ while true {
         }
 
         if foundItem != nil { break }
+
+        print("Inspecting context menu...")
+        _ = menuItem(notes, trace: true)
 
         key(53)
         pause(0.3)
