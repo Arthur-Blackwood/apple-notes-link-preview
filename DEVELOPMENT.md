@@ -1,5 +1,13 @@
 # 开发记录
 
+## V11 新增机制（混合脚本链接标准化）
+
+- `scan` 新增 `hasVerifiedURL` 标记，并在排序前合并零间隙相邻的同 URL 片段（`mergeAdjacentSameURLLinks`），防止富文本字体切换在扫描阶段把同一链接拆成多项。
+- `needsLinkNormalization` 仅在目标链接拥有已验证 URL、当前显示名与纯 ASCII 编码 URL 不同且包含多脚本片段（如拉丁/数字 + CJK、Emoji + 文字等）时触发。纯英文、纯中文与纯 ASCII 裸 URL 继续走原 V9/V10 路径。
+- 标准化流程通过右键菜单打开 **Edit Link… / 编辑链接… / 編輯連結…**，仅在 `AXSheet`/`AXPopover`/对话框窗口内严格匹配唯一的 URL 字段与当前显示名字段；写入时优先使用聚焦域编辑器的 `AXSelectedText` 替换，并依次回退到保留剪贴板的 `⌘A`+`⌘V` 与 `AXValue`，写入后复核 URL 字段未被改动。
+- 关闭弹窗后通过重扫验证具体出现位置（`targetIndex`）、完整有序 URL 列表与前后缀正文严格一致（`beforePrefix + tempName + beforeSuffix == afterText`），确保重复 URL 场景不会误改其他出现位置。
+- 若 **Show Link Preview** 菜单未找到或转换前失败且正文未发生部分变动，`attemptRestoreOriginalTitle` 自动重新打开 **Edit Link** 恢复原显示名并核对恢复回 `originalText`；状态不明确时立即中止并打印诊断信息。可用 `--no-normalize-mixed` 禁用标准化。
+
 ## V10 如何工作
 
 - 从前台 Notes 的焦点查找 `AXTextArea`。编辑器查找还有系统焦点和鼠标命中测试两条回退路径。

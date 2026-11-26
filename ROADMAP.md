@@ -1,6 +1,6 @@
-# V11 链接标准化实验
+# V11 链接标准化实现与实机验收
 
-当前状态为待实机验证。目标是用一个完整 URL 作为临时显示名称，确认 Notes 能否把中英文混合标题完整转换为预览卡片。这里的标准化（link normalization）指统一显示名称，目标 URL 原样保留。
+V11 原型已合入 `notes-link-preview.swift`（`--apply` 默认启用，可通过 `--no-normalize-mixed` 关闭；已通过静态类型检查和纯逻辑单元测试，待在可丢弃 Apple Notes 笔记中完成实机验收）。目标是用纯 ASCII 完整 URL 作为临时显示名称，使 Notes 把中英文混合标题完整转换为预览卡片，并在失败时自动恢复原标题。这里的标准化（link normalization）指统一显示名称，目标 URL 原样保留。
 
 ## 手动对照
 

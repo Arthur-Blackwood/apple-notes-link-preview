@@ -1,6 +1,6 @@
 # Apple Notes Link Preview
 
-这个 macOS Swift 脚本扫描当前 Apple Notes 笔记中的链接，并通过 Notes 自带的 **Show Link Preview（显示链接预览）** 将其转换为预览卡片。当前源码是 V10。
+这个 macOS Swift 脚本扫描当前 Apple Notes 笔记中的链接，并通过 Notes 自带的 **Show Link Preview（显示链接预览）** 将其转换为预览卡片。当前源码是 V11。
 
 ## 使用
 
@@ -16,19 +16,22 @@
 也可直接运行 Swift。直接运行会显示被别名过滤掉的 `DEBUG:` 行，并保留 Swift 进程的退出状态。
 
 ```zsh
-swift "$HOME/apple-notes-link-preview/notes-link-preview.swift"
-swift "$HOME/apple-notes-link-preview/notes-link-preview.swift" --apply
+swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift"
+swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift" --apply
+swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift" --apply --no-normalize-mixed
 ```
 
-V10 在验证失败时停止。已发生的转换可能留在笔记里，包括只转了一部分的混合语言链接。用 `nlp` 前请先复制测试笔记，失败后检查 URL、残留文字和周围内容，再决定是否撤销。
+V11 在 `--apply` 模式下默认启用**中英混合链接标准化**：遇到包含混合字符（如中英文、数字+中文、Emoji+文字）且已确认目标 URL 的链接时，先通过 Notes 的 **Edit Link** 临时将显示名称改为纯 ASCII 完整 URL（目标地址不变、按具体出现位置校验全文前后缀），再执行 **Show Link Preview**，以消除 Apple Notes 对多字体片段链接的部分转换残留；若触发菜单失败且正文未发生部分改动，则自动恢复原显示名称。可通过 `--no-normalize-mixed` 关闭该行为回退到 V10 路径。
+
+V11 在验证失败时仍会立即停止。用 `nlp` 前请先复制测试笔记，失败后检查 URL、残留文字和周围内容，再决定是否撤销。
 
 ## 项目文件
 
-- [AGENTS.md](AGENTS.md) 提供下一次 Codex 会话的开发交接。
-- [CHANGELOG.md](CHANGELOG.md) 记录 V1–V10 源码差异和备份对应关系。
+- [AGENTS.md](AGENTS.md) 提供开发交接说明。
+- [CHANGELOG.md](CHANGELOG.md) 记录 V1–V11 源码差异和备份对应关系。
 - [DEVELOPMENT.md](DEVELOPMENT.md) 记录实现细节和已尝试的方案。
 - [TESTING.md](TESTING.md) 汇总实机历史和回归用例。
-- [ROADMAP.md](ROADMAP.md) 描述 V11 的手动标准化实验和验收条件。
-- `backups/` 保存 V1–V9 原名备份，以及独立的 V10 快照。
+- [ROADMAP.md](ROADMAP.md) 描述 V11 链接标准化方案和验收条件。
+- `backups/` 保存 V1–V11 各版本源码快照（V1–V10 原始字节保留不变）。
 
-项目路径为 `~/apple-notes-link-preview`。家目录里的 `~/notes-link-preview.swift` 和九个旧备份可作为回退副本。zsh 别名定义在 `~/.zshrc`。新终端会读入当前定义。需要恢复旧入口时，从迁移时保存的 `~/.zshrc.notes-link-preview.*` 备份取回两条旧别名，并保留迁移后对配置做的其他修改。
+本地项目路径为 `~/Projects/apple-notes-link-preview`（如 `~/.zshrc` 中的 `nls`/`nlp` 别名仍指向旧路径 `~/apple-notes-link-preview`，请同步更新别名指向）。

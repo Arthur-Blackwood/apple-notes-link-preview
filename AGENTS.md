@@ -2,16 +2,16 @@
 
 ## 当前基线
 
-- 项目位于 `~/apple-notes-link-preview`，入口为 `notes-link-preview.swift`。当前版本 V10 的 SHA-256 是 `967ef92e5623e13cb859147a83ff5cb3248ba091c3dceb0adf45983290db8f8f`，项目内快照见 `backups/notes-link-preview.swift.v10.bak`。
-- `nls` 为只读扫描，`nlp` 传入 `--apply`。改代码前先确认命令指向何处。在读取这些文件的 Mac 上，项目路径是 `/Users/stevelee/apple-notes-link-preview`。
+- 项目位于 `/Users/stevelee/Projects/apple-notes-link-preview`，入口为 `notes-link-preview.swift`。当前版本 V11 的 SHA-256 是 `f2671e9042fc38e1d772b5ae885b71a3ae5d26b1e86ba171597dcbd7b298956e`，项目内快照见 `backups/notes-link-preview.swift.v11.bak`（V1–V10 原始快照保留不变，Git tag 覆盖 `v1`–`v11`）。
+- `nls` 为只读扫描，`nlp` 传入 `--apply`（V11 默认启用混合脚本链接标准化，可用 `--no-normalize-mixed` 关闭）。改代码前先确认 `~/.zshrc` 中别名指向 `/Users/stevelee/Projects/apple-notes-link-preview/notes-link-preview.swift`。
 - 先读 [DEVELOPMENT.md](DEVELOPMENT.md)、[TESTING.md](TESTING.md) 和 [ROADMAP.md](ROADMAP.md)。历史版本和证据出处见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 下一步
 
-1. 在可丢弃的 Apple Notes 笔记中做 V11 手动对照。把混合语言链接的显示名称改成完整 URL，再用 Notes 的 **Show Link Preview**。分别记录控制组、行内、独立行及修改前后的 URL 与文字。
-2. 手动实验能可靠消除文字残留后，再针对混合语言链接设计显式启用的原型。先建立目标确认和恢复路径，再考虑启用自动改名。
-3. 保留 V9 的原生鼠标事件、V10 的焦点与目标范围保护，以及转换后的重新扫描和异常中止。保持 `nls` 只读。测试重复 URL 时按具体出现位置核对。
-4. V10 已验证完整选区仍可能部分转换，手动菜单也复现了混合标题残留。收到新的可复现证据后，再考虑重做选区或菜单触发方案。富文本片段解释仍是待验证的假设。
+1. 在可丢弃的 Apple Notes 笔记中对 V11 做实机回归验证：先用 `nls` 确认 `[mixed-script: "..."]` 标注，再运行 `--apply` 验证独立行、行内和重复 URL 的中英文混合链接（如 `Python 官方文档`、`统计计算 R 语言`、`GitHub 开源平台`）是否完整转为预览卡片且无文字残留。
+2. 如遇不同 macOS 版本的 **Edit Link** 弹窗 AX 层级差异，收集直接运行 Swift 输出的 `DEBUG: Dialog container ...` 诊断日志并调整弹窗匹配逻辑。
+3. 保留 V9 的原生鼠标事件、V10 的焦点与目标范围保护、V11 的出现位置级校验与失败自动恢复，以及转换后的重新扫描和异常中止。保持 `nls` 只读。
+4. V10 已验证完整选区仍可能部分转换，手动菜单也复现了混合标题残留。V11 通过转换前 Edit Link 标准化规避多字体片段截断。
 
 ## 操作范围
 

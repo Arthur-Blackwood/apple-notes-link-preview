@@ -1,4 +1,4 @@
-# V1–V10 变更历史
+# V1–V11 变更历史
 
 V1–V10 的实现变化以本机实存源码及相邻版本差异为依据。实机结果以旧会话中的用户报告和日志为依据。早期版本目前缺少可核对的实机日志。未带版本号的 `.bak` 是 V2 之前的可用基线，这里按 V1 归档。
 
@@ -14,5 +14,6 @@ V1–V10 的实现变化以本机实存源码及相邻版本差异为依据。�
 | V8 | `notes-link-preview.swift.v8.bak` | 优先读取 AX 链接的目标 URL，缺失时保留标题回退。增加转换后轮询和验证失败时的数量诊断。 |
 | V9 | `notes-link-preview.swift.v9.bak` | 使用 HID 鼠标移动及按键事件，交替尝试右键和 Control-click。可见目标优先直接点击，必要时才移动光标或用键盘滚动。 |
 | V10 | `notes-link-preview.swift.v10.bak` | 识别行内链接并设置完整选区，菜单弹出后再次确认选区。失败时打印原始标题、剩余同 URL 文字和计数。实机仍复现混合标题残留。 |
+| V11 | `notes-link-preview.swift.v11.bak` | 合并扫描中相邻同 URL 片段并记录 `hasVerifiedURL`；`--apply` 默认启用混合脚本链接标准化（可用 `--no-normalize-mixed` 关闭）：通过 **Edit Link** 弹窗双向校验 URL 与显示名后临时改为纯 ASCII 完整 URL，按出现位置校验全文前后缀不变，再执行 V9/V10 预览转换；预览前失败自动恢复原标题，只读扫描标注 `[mixed-script: "..."]`。 |
 
-V10 工作副本与 V10 快照在迁移时逐字节相同。原始 V1–V9 文件名保留。旧记录出处为 ChatGPT 会话「链接预览批量转换」，会话 ID 为 `6b06a293-82dc-83ec-92d3-68f451bbd467`。可核对的测试结果见 [TESTING.md](TESTING.md)。
+V1–V10 原始备份逐字节保留，并已通过 Git 提交历史还原（tag `v1`–`v11`）。旧记录出处为 ChatGPT 会话「链接预览批量转换」，会话 ID 为 `6b06a293-82dc-83ec-92d3-68f451bbd467`。可核对的测试结果见 [TESTING.md](TESTING.md)。
