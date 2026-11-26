@@ -1,37 +1,68 @@
 # Apple Notes Link Preview
 
-这个 macOS Swift 脚本扫描当前 Apple Notes 笔记中的链接，并通过 Notes 自带的 **Show Link Preview（显示链接预览）** 将其转换为预览卡片。当前源码是 V11。
+A standalone macOS Swift CLI script that scans links in the currently open Apple Notes note and batch-converts them into rich link preview cards using Apple Notes' native **Show Link Preview** context menu action.
 
-## 使用
+Current version: **V11**
 
-需要 macOS、Swift 命令行工具，以及运行 Swift 的终端应用的辅助功能（Accessibility）权限。在「系统设置 → 隐私与安全性 → 辅助功能」中授权该终端应用。打开一篇可丢弃的测试笔记，再执行下列命令。
+## Features
 
-| 命令 | 行为 |
-| --- | --- |
-| `nls` | 扫描笔记并列出候选链接。 |
-| `nlp` | 重新扫描并转换当前笔记中的候选链接。 |
+- **Safe dry-run scanning**: Inspects all candidate links in the active note without modifying anything.
+- **Native UI automation**: Uses macOS Accessibility API (`AXUIElement`) and native HID mouse events (`CGEvent`) with automatic right-click / Control-click retries and scroll-into-view fallback.
+- **Inline link protection**: Selects and verifies the complete link range before triggering menus on inline links.
+- **Mixed-script link normalization (V11)**: Works around an Apple Notes bug where mixed-script link titles (e.g., mixed English + CJK such as `Python 官方文档`, `统计计算 R 语言`, or `GitHub 开源平台`) only partially convert and leave trailing text fragments behind. Before triggering **Show Link Preview**, V11 temporarily normalizes mixed-script titles to their verified pure-ASCII URL via Notes' **Edit Link** dialog, verifies exact occurrence-level text and URL invariants, and automatically restores the original title if preview conversion cannot proceed.
+- **Strict guardrails**: Continuously verifies Apple Notes focus, rescans after each conversion, checks ordered link identities, and halts immediately with diagnostics on any unexpected change.
+- **Multilingual Notes UI support**: Matches Apple Notes context menus and dialogs in English, Simplified Chinese, and Traditional Chinese.
 
-看到提示后，在 5 秒内点进笔记正文，运行期间保持 Notes 在前台。先用 `nls` 核对候选项。候选项会包含重复 URL，因为同一地址在笔记中可以出现多次。
+## Requirements
 
-也可直接运行 Swift。直接运行会显示被别名过滤掉的 `DEBUG:` 行，并保留 Swift 进程的退出状态。
+- macOS with Apple Notes
+- Xcode Command Line Tools (`swift`)
+- **Accessibility permission** granted to the terminal app running Swift:
+  - Open **System Settings → Privacy & Security → Accessibility** and enable your terminal app (e.g., Terminal, iTerm2, Warp, VS Code).
+
+## Usage
+
+Always test on a **disposable or duplicated note** first. Keep Apple Notes active in the foreground and click inside the note body within 5 seconds of running the command.
+
+### Direct Execution
 
 ```zsh
-swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift"
-swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift" --apply
-swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift" --apply --no-normalize-mixed
+# Dry run (read-only scan; highlights mixed-script links that V11 will normalize)
+swift ./notes-link-preview.swift
+
+# Convert candidate links (V11 mixed-script normalization enabled by default)
+swift ./notes-link-preview.swift --apply
+
+# Convert without mixed-script normalization (V10 behavior)
+swift ./notes-link-preview.swift --apply --no-normalize-mixed
 ```
 
-V11 在 `--apply` 模式下默认启用**中英混合链接标准化**：遇到包含混合字符（如中英文、数字+中文、Emoji+文字）且已确认目标 URL 的链接时，先通过 Notes 的 **Edit Link** 临时将显示名称改为纯 ASCII 完整 URL（目标地址不变、按具体出现位置校验全文前后缀），再执行 **Show Link Preview**，以消除 Apple Notes 对多字体片段链接的部分转换残留；若触发菜单失败且正文未发生部分改动，则自动恢复原显示名称。可通过 `--no-normalize-mixed` 关闭该行为回退到 V10 路径。
+Running `swift` directly prints full `DEBUG:` diagnostics and preserves the process exit code.
 
-V11 在验证失败时仍会立即停止。用 `nlp` 前请先复制测试笔记，失败后检查 URL、残留文字和周围内容，再决定是否撤销。
+### Optional Shell Aliases (`~/.zshrc`)
 
-## 项目文件
+```zsh
+alias nls='swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift" | grep -v "^DEBUG:"'
+alias nlp='swift "$HOME/Projects/apple-notes-link-preview/notes-link-preview.swift" --apply | grep -v "^DEBUG:"'
+```
 
-- [AGENTS.md](AGENTS.md) 提供开发交接说明。
-- [CHANGELOG.md](CHANGELOG.md) 记录 V1–V11 源码差异和备份对应关系。
-- [DEVELOPMENT.md](DEVELOPMENT.md) 记录实现细节和已尝试的方案。
-- [TESTING.md](TESTING.md) 汇总实机历史和回归用例。
-- [ROADMAP.md](ROADMAP.md) 描述 V11 链接标准化方案和验收条件。
-- `backups/` 保存 V1–V11 各版本源码快照（V1–V10 原始字节保留不变）。
+| Command | Behavior |
+| --- | --- |
+| `nls` | Read-only scan listing candidate links (including duplicate URLs by occurrence) and flagging `[mixed-script: "..."]` entries. |
+| `nlp` | Rescans and converts candidate links in the active note from bottom to top. |
 
-本地项目路径为 `~/Projects/apple-notes-link-preview`（如 `~/.zshrc` 中的 `nls`/`nlp` 别名仍指向旧路径 `~/apple-notes-link-preview`，请同步更新别名指向）。
+## Safety Notes
+
+- On verification failure or focus loss, the script stops immediately with a non-zero exit code.
+- Previously converted links in the same batch remain in the note; inspect remaining links and surrounding text before deciding whether to undo.
+- If **Show Link Preview** cannot be triggered after normalizing a mixed-script link and the note text has not partially mutated, V11 automatically restores the original link title via **Edit Link**.
+
+## Repository Structure
+
+- [notes-link-preview.swift](notes-link-preview.swift) — Main single-file Swift script (V11).
+- `backups/` — Byte-for-byte snapshots of V1 through V11 (`v1`–`v11` are also preserved as Git tags).
+- [CHANGELOG.md](CHANGELOG.md) — Version-by-version history (V1–V11).
+- [DEVELOPMENT.md](DEVELOPMENT.md) — Implementation details, attempted approaches, and diagnostics notes.
+- [TESTING.md](TESTING.md) — Historical test observations and regression checklist.
+- [ROADMAP.md](ROADMAP.md) — V11 link normalization design and verification criteria.
+- [AGENTS.md](AGENTS.md) — Development handoff notes.
